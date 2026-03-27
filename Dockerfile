@@ -1,51 +1,28 @@
 ###############################################################################
-# Stage 1 – build flash_attn
-# Needs nvcc (devel image) to compile the CUDA extension.
+# Single-stage build: use the devel image so flash_attn is compiled and run
+# on the same system, eliminating ABI mismatches.
 ###############################################################################
-FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu24.04 AS flash_builder
+FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
         python3 python3-pip python3-venv python3-dev \
-        build-essential git \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# PyTorch 2.6 built against CUDA 12.4 – fully compatible with CUDA 12.6 runtime
-RUN pip install --upgrade pip && \
-    pip install torch==2.6.0 packaging ninja \
-        --index-url https://download.pytorch.org/whl/cu124
-
-# Compile flash_attn and save the wheel so the runtime stage can install it
-# without needing nvcc.
-RUN pip wheel flash_attn==2.7.4.post1 --no-build-isolation -w /flash_wheels
-
-
-###############################################################################
-# Stage 2 – runtime image (what the user asked for)
-###############################################################################
-FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-        python3 python3-pip python3-venv \
-        ffmpeg git \
+        build-essential cmake pkg-config git ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Python environment ------------------------------------------------------
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip setuptools wheel
 
-# Install the pre-built flash_attn wheel from the builder stage
-COPY --from=flash_builder /flash_wheels /flash_wheels
-
-# Same torch variant used when compiling flash_attn
-RUN pip install torch==2.6.0 torchaudio==2.6.0 \
+# --- PyTorch -----------------------------------------------------------------
+# cu124 wheels are compatible with the CUDA 12.6 runtime
+RUN pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0 \
         --index-url https://download.pytorch.org/whl/cu124
-RUN pip install /flash_wheels/flash_attn*.whl
+
+# --- flash_attn (compile in-place; nvcc is available in the devel image) -----
+RUN pip install packaging ninja psutil numpy && \
+    pip install flash_attn==2.7.4.post1 --no-build-isolation
 
 # --- Audio Flamingo 3 source -------------------------------------------------
 RUN git clone --branch audio_flamingo_3 --depth 1 \
@@ -57,8 +34,7 @@ WORKDIR /app
 RUN pip install -e .
 
 # --- Inference dependencies --------------------------------------------------
-# Keeping this minimal (no training/eval extras like deepspeed, wandb, gradio).
-# If you hit a missing import, full deps are in docker/requirements.txt.
+RUN pip install git+https://github.com/openai/whisper.git
 RUN pip install \
     transformers==4.46.0 \
     tokenizers==0.20.3 \
@@ -71,7 +47,6 @@ RUN pip install \
     timm==0.9.12 \
     librosa==0.11.0 \
     soundfile==0.13.1 \
-    openai-whisper==20240930 \
     pydub==0.25.1 \
     "av==14.2.0" \
     termcolor \
@@ -80,8 +55,13 @@ RUN pip install \
     kaldiio \
     beartype \
     "bitsandbytes==0.43.2" \
+    "deepspeed==0.15.4" \
     "decord==0.6.0" \
     "s2wrapper @ git+https://github.com/bfshi/scaling_on_scales@9c008a37540e761f53574b488979db6e49a64312"
+
+# Re-pin torch at the end to prevent any dependency from downgrading it
+RUN pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0 \
+        --index-url https://download.pytorch.org/whl/cu124 --no-deps
 
 # --- Chat script -------------------------------------------------------------
 COPY chat.py /app/chat.py

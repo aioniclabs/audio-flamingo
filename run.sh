@@ -17,11 +17,10 @@ AUDIO_NAME="$(basename "$AUDIO_ABS")"
 
 IMAGE="audio-flamingo"
 
-# Build image if it doesn't exist yet
-if ! docker image inspect "$IMAGE" &>/dev/null; then
-    echo "[*] Building Docker image '$IMAGE' (first run – takes ~10-20 min) …"
-    docker build -t "$IMAGE" "$(dirname "$0")"
-fi
+# Always rebuild so Dockerfile changes are picked up.
+# Docker layer caching makes this fast when nothing changed.
+echo "[*] Building Docker image '$IMAGE' …"
+docker build -t "$IMAGE" "$(dirname "$0")"
 
 echo "[*] Starting chat for: $AUDIO_NAME"
 docker run \
