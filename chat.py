@@ -60,13 +60,33 @@ def load_model(model_name: str, think_mode: bool):
 # Chat loop
 # ---------------------------------------------------------------------------
 
+def get_duration(audio_path: str) -> float:
+    import soundfile as sf
+    import subprocess
+    try:
+        info = sf.info(audio_path)
+        return info.duration
+    except Exception:
+        # fallback for mp3 and other formats soundfile can't read directly
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+            capture_output=True, text=True
+        )
+        return float(result.stdout.strip())
+
+
 def chat(audio_path: str, model_name: str, think_mode: bool) -> None:
     from llava.media import Sound
 
     model = load_model(model_name, think_mode)
     sound = Sound(audio_path)
 
-    print(f"Audio : {audio_path}")
+    duration = get_duration(audio_path)
+    mins, secs = divmod(int(duration), 60)
+    duration_str = f"{mins}:{secs:02d}"
+
+    print(f"Audio : {audio_path}  ({duration_str})")
     print("Type your question and press Enter.  'quit' / Ctrl-C to exit.")
     print("─" * 64)
 
@@ -95,7 +115,9 @@ def chat(audio_path: str, model_name: str, think_mode: bool) -> None:
             )
             text = f"Previous conversation:\n{prior}\n\nUser: {user_input}"
         else:
-            text = user_input
+            # On the first turn, prepend the known duration so the model
+            # covers the full track rather than defaulting to ~30 seconds.
+            text = f"[This audio is {duration_str} long] {user_input}"
 
         # ── inference ───────────────────────────────────────────────────────
         try:
