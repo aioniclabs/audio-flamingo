@@ -121,7 +121,7 @@ def chat(audio_path: str, model_name: str, think_mode: bool) -> None:
 
         # ── inference ───────────────────────────────────────────────────────
         try:
-            response = model.generate_content([sound, text])
+            response = model.generate_content([sound, text], generation_config={"max_new_tokens": 512})
         except Exception as exc:
             print(f"[error] {exc}")
             continue
