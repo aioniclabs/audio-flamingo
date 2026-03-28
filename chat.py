@@ -15,6 +15,7 @@ follow up on previous answers.
 import argparse
 import os
 import sys
+from transformers import GenerationConfig
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,8 @@ def chat(audio_path: str, model_name: str, think_mode: bool) -> None:
 
         # ── inference ───────────────────────────────────────────────────────
         try:
-            response = model.generate_content([sound, text], generation_config={"max_new_tokens": 512})
+            gen_cfg = GenerationConfig(max_new_tokens=512, do_sample=True, temperature=0.7)
+            response = model.generate_content([sound, text], generation_config=gen_cfg)
         except Exception as exc:
             print(f"[error] {exc}")
             continue
