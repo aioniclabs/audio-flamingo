@@ -123,8 +123,12 @@ def chat(audio_path: str, model_name: str, think_mode: bool) -> None:
         # ── inference ───────────────────────────────────────────────────────
         try:
             gen_cfg = GenerationConfig(max_new_tokens=512, do_sample=True, temperature=0.7)
+            print(f"[debug] model_max_length={model.tokenizer.model_max_length}")
+            print(f"[debug] gen_cfg={gen_cfg}")
             response = model.generate_content([sound, text], generation_config=gen_cfg)
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             print(f"[error] {exc}")
             continue
 
