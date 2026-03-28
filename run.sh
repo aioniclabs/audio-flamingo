@@ -17,10 +17,12 @@ AUDIO_NAME="$(basename "$AUDIO_ABS")"
 
 IMAGE="audio-flamingo"
 
-# Always rebuild so Dockerfile changes are picked up.
-# Docker layer caching makes this fast when nothing changed.
-echo "[*] Building Docker image '$IMAGE' …"
-docker build -t "$IMAGE" "$(dirname "$0")"
+# Pass --build to force a rebuild (e.g. after Dockerfile changes).
+# Otherwise, skip if the image already exists.
+if [[ "${*}" == *"--build"* ]] || ! docker image inspect "$IMAGE" &>/dev/null; then
+    echo "[*] Building Docker image '$IMAGE' …"
+    docker build -t "$IMAGE" "$(dirname "$0")"
+fi
 
 echo "[*] Starting chat for: $AUDIO_NAME"
 docker run \
