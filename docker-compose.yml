@@ -51,7 +51,7 @@ services:
     <<: [*common, *gpu]
     container_name: audio-flamingo-api
     ports:
-      - "5566:5566"
+      - "8888:5566"
     restart: unless-stopped
     # server.py is the default CMD in the Dockerfile
 
