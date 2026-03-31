@@ -1,0 +1,67 @@
+###############################################################################
+# Audio Flamingo 3 – docker-compose
+#
+# Services
+# --------
+#   api   – HTTP endpoint on port 5566  (default, always runs)
+#   cli   – interactive chat.py shell   (profile "cli", for quick testing)
+#
+# Usage
+# -----
+#   # Build & start the API server:
+#   docker compose up --build
+#
+#   # Run chat.py directly against a local audio file (interactive):
+#   docker compose run --rm cli /audio/I_Kick_Back.mp3
+#   docker compose run --rm cli /audio/I_Kick_Back.mp3 --think
+#
+#   # Hit the API from the host (curl example):
+#   curl -X POST http://localhost:5566/chat \
+#     -F "audio=@I_Kick_Back.mp3" \
+#     -F "question=What genre is this?"
+#
+# Environment
+# -----------
+#   HF_CACHE_DIR  – host path for HuggingFace model cache
+#                   defaults to ~/.cache/huggingface
+#   MODEL_NAME    – HuggingFace model ID
+#                   defaults to nvidia/audio-flamingo-3
+###############################################################################
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-common: &common
+  build: .
+  environment:
+    HF_HOME: /data/hf_cache
+    MODEL_NAME: ${MODEL_NAME:-nvidia/audio-flamingo-3}
+  volumes:
+    - ${HF_CACHE_DIR:-~/.cache/huggingface}:/data/hf_cache
+    - .:/audio:ro   # local files reachable at /audio inside the container
+
+services:
+  api:
+    <<: [*common, *gpu]
+    container_name: audio-flamingo-api
+    ports:
+      - "5566:5566"
+    restart: unless-stopped
+    # server.py is the default CMD in the Dockerfile
+
+  cli:
+    <<: [*common, *gpu]
+    container_name: audio-flamingo-cli
+    profiles: [cli]
+    stdin_open: true
+    tty: true
+    entrypoint: ["python3", "/app/chat.py"]
+    # Pass the audio path (and optional flags) after `docker compose run --rm cli`:
+    #   docker compose run --rm cli /audio/I_Kick_Back.mp3
+    #   docker compose run --rm cli /audio/I_Kick_Back.mp3 --think

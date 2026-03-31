@@ -63,12 +63,17 @@ RUN pip install \
 RUN pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0 \
         --index-url https://download.pytorch.org/whl/cu124 --no-deps
 
-# --- Chat script -------------------------------------------------------------
+# --- API / server dependencies -----------------------------------------------
+RUN pip install fastapi uvicorn[standard]
+
+# --- Chat & server scripts ---------------------------------------------------
 COPY chat.py /app/chat.py
+COPY server.py /app/server.py
 
 # HuggingFace cache – mount a host directory here to avoid re-downloading
 # the 7B model on every container run.
 ENV HF_HOME=/data/hf_cache
 VOLUME ["/data"]
 
-ENTRYPOINT ["python3", "/app/chat.py"]
+# Default: run the API server. Override CMD to use chat.py directly.
+CMD ["python3", "/app/server.py"]
